@@ -1,0 +1,44 @@
+parameters:
+- name: stageName  # defaults for any parameters that aren't specified
+  type: string
+  default: 'build version job'
+- name: Major
+  type: string
+  default: '1'
+- name: Minor
+  type: string
+  default: '0' 
+
+stages:
+- stage: 
+  displayName: ${{ parameters.stageName }}
+  jobs:
+  - job: Build_Branch_Version_Number
+    displayName: Build_Branch_Version_Number
+    condition: ne(variables['Build.SourceBranch'], 'refs/heads/master')
+    variables:
+        prpatch: $[counter(variables['System.PullRequest.PullRequestId'], 0)]
+        brpatch: $[counter(variables['Build.SourceBranchName'], 0)]
+    steps:
+      - checkout: none
+      - bash: |
+            echo "##vso[build.updatebuildnumber]${{parameters.Major}}.${{parameters.Minor}}-PullRequest.$(prpatch)"
+            echo "##vso[task.setvariable variable=buildVersion;]${{parameters.Major}}.${{parameters.Minor}}-PullRequest.$(prpatch)"
+        condition: eq(variables['Build.Reason'], 'PullRequest')
+        displayName: SetPRBuildName
+      - bash: |
+            echo "##vso[build.updatebuildnumber]${{parameters.Major}}.${{parameters.Minor}}-$(Build.SourceBranchName).$(brpatch)"
+            echo "##vso[task.setvariable variable=buildVersion;]${{parameters.Major}}.${{parameters.Minor}}-$(Build.SourceBranchName).$(prpatch)"
+        condition: and(ne(variables['Build.SourceBranch'], 'refs/heads/master'), ne(variables['Build.Reason'], 'PullRequest'))
+        displayName: SetBranchBuildName
+  - job: Build_Master_Version_Number
+    displayName: Build_Master_Version_Number
+    condition: eq(variables['Build.SourceBranch'], 'refs/heads/master')
+    variables:
+        patch: $[counter(variables['Minor'], 0)]   # variables['Minor']
+    steps:
+      - checkout: none
+      - bash: |
+            echo "##vso[build.updatebuildnumber]${{parameters.Major}}.${{parameters.Minor}}.$(patch)"
+            echo "##vso[task.setvariable variable=buildVersion;]${{parameters.Major}}.${{parameters.Minor}}.$(patch)"
+        displayName: SetMasterBuildName

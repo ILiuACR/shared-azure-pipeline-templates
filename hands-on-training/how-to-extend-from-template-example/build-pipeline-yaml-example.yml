@@ -1,0 +1,63 @@
+
+#add a pipeline trigger to run your pipeline
+#In this example, pipeline will be triggered when there is code changes commited to master branch of current repository
+#More complex trigger condition can be found at https://docs.microsoft.com/en-us/azure/devops/pipelines/process/pipeline-triggers?view=azure-devops&tabs=yaml
+trigger:
+    - master
+
+#checkout multiple repositories in the pipeline
+resources:
+  repositories:
+  #1) this repository contains ADOCS share templates https://github.com/ACRCode/ADOCS-templates
+  #Required
+  - repository: azureSharedTemplates
+    type: github
+    endpoint: <Your Github Service Connection Name>
+    #For add or find Github service connection, Go to Project Settings, select Service Connections on left navigation, copy the name of the github service connection if you can find in the list, 
+    # if not, click New Service Connection, Select Github to create a service connection.
+    name: ACRCode/ADOCS-templates
+    branch: master
+
+#define variables
+variables:
+  solution: '**/*.sln'
+  buildPlatform: 'Any CPU'
+  buildConfiguration: 'Release'
+
+#ADOCS requires pipeline yaml file extending from shared template created by ADOCS team
+# You should provide parameters defined in shared template (shared-template.yml) as show below
+extends:
+  template: hands-on-training/shared-template.yml@azureSharedTemplates #Refer to the resources section repo 1)
+  # Below are parameters needed for shared template
+  parameters:
+    #parameters to set build version
+    buildVersionMajor: 1
+    buildVersionMinor: 0
+    #Required
+    #Provide tasks which will be executed for build process, below is an example of tasks for .net Core project
+    buildSteps:
+    - task: NuGetToolInstaller@1
+    - task: NuGetCommand@2
+      inputs:
+        restoreSolution: '$(solution)'
+    - task: VSBuild@1
+      inputs:
+        solution: '$(solution)'
+        msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:DesktopBuildPackageLocation="$(build.artifactStagingDirectory)\WebApp.zip" /p:DeployIisAppPath="Default Web Site"'
+        platform: '$(buildPlatform)'
+        configuration: '$(buildConfiguration)'
+    - task: VSTest@2
+      inputs:
+        platform: '$(buildPlatform)'
+        configuration: '$(buildConfiguration)'
+    #Choose if the project needs to use self hosted agents instead of Microsoft hosted agent
+    #For example, if project needs to restore nuget packages which are hosted in ACR internal package server, then needs to use self hosted agents
+    useSelfHostedAgents: false
+    #If useSelfHostedAgents = false: 
+    #Provide your prefered Microsoft hosted agent pool image, with which you build tasks will be executed. Default is 'ubuntu-latest'
+    #For more image options, check https://docs.microsoft.com/en-us/azure/devops/pipelines/agents/hosted?view=azure-devops&tabs=yaml#use-a-microsoft-hosted-agent
+    buildPoolImage: 'windows-latest'
+    #If useSelfHostedAgents = true: 
+    #Provide the self hosted agent pool name which is shared with your project, you can find the agent pool in project settings
+    #If you are not sure about how to find it or the agent pool is not shared with your project, please contact ADOCS team for help
+    selfHostedAgentPoolForBuild: 'Local Agents'

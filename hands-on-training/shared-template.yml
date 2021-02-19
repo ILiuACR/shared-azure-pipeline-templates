@@ -1,0 +1,68 @@
+parameters:
+- name: buildVersionMajor
+  type: string
+  default: '1'
+- name: buildVersionMinor
+  type: string
+  default: '0' 
+- name: buildSteps # the name of the parameter is buildSteps
+  type: stepList # data type is StepList
+  default: [] # default value of buildSteps
+  #parameter for whether use self hosted agents or microsoft hosted agents
+- name: useSelfHostedAgents
+  type: boolean
+  default: false
+  # provide prefered image if use microsoft hosted agents
+- name: buildPoolImage
+  displayName: Pool Image
+  type: string
+  default: ubuntu-latest
+  values:
+  - windows-latest
+  - vs2017-win2016
+  - ubuntu-latest
+  - ubuntu-16.04
+  - macOS-latest
+  - macOS-10.14
+  - ubuntu-18.04
+  # provide selft hosted agent pool if choose to NOT use microsoft hosted agents
+- name: selfHostedAgentPoolForBuild
+  displayName: Build Agent Pool
+  type: string
+  default: Local Agents
+
+
+stages:
+############################################# Set Build Version #######################################################
+- template: ../build-version.yml
+  parameters:
+    stageName: 'Set Build Version'
+    Major: '1'
+    Minor: '0' 
+
+- stage: BuildStg
+  jobs:
+  ############################################# Build job #######################################################
+  #For project choose to use microsoft hosted agent for build process
+  - ${{ if eq(parameters.useSelfHostedAgents, false) }}:
+    - job: build
+      pool: 
+        vmImage: ${{ parameters.buildPoolImage }}
+      steps:
+      - ${{ each step in parameters.buildSteps }}:
+        - ${{ each pair in step }}:
+            ${{ pair.key }}: ${{ pair.value }}
+  #For project choose to use self hosted agent for build process
+  - ${{ if eq(parameters.useSelfHostedAgents, true) }}:
+    - job: build
+      pool: ${{parameters.selfHostedAgentPoolForBuild}}
+      steps:
+      - ${{ each step in parameters.buildSteps }}:
+        - ${{ each pair in step }}:
+            ${{ pair.key }}: ${{ pair.value }}
+
+
+
+
+
+
