@@ -13,74 +13,59 @@ resources:
   - repository: azureSharedTemplates
     type: github
     endpoint: <Your Github Service Connection Name>
-    #By default, a github service connection with name of your project will be created, which you can use as the endpoint
     #For add or find Github service connection, Go to Project Settings, select Service Connections on left navigation, copy the name of the github service connection if you can find in the list, 
     # if not, click New Service Connection, Select Github to create a service connection.
     name: ILiuACR/shared-azure-pipeline-templates
     branch: master
 
-#define variables
-variables:
-  buildConfiguration: 'Release'
-  wwwrootDir: 'Tailspin.SpaceGame.Web/wwwroot'
-  dotnetSdkVersion: '3.1.300'
-
 #ADOCS requires pipeline yaml file extending from shared template created by ADOCS team
 # You should provide parameters defined in shared template (shared-template.yml) as show below
 extends:
-  template: hands-on-training/shared-template.yml@azureSharedTemplates
+  template: hands-on-training/shared-template.yml@azureSharedTemplates #Refer to the resources section repo 1)
   # Below are parameters needed for shared template
   parameters:
     #parameters to set build version
     buildVersionMajor: 1
     buildVersionMinor: 0
     #Required
-    #Provide tasks which will be executed for build process, below is an example of tasks for .net Core project
+    #Provide tasks which will be executed for build process, below is an example of tasks for Angular project
     buildSteps:
-    - task: UseDotNet@2
-      displayName: 'Use .NET Core SDK $(dotnetSdkVersion)'
-      inputs:
-        version: '$(dotnetSdkVersion)'
-    - task: Npm@1
-      displayName: 'Run npm install'
-      inputs:
-        verbose: false
-    - script: './node_modules/.bin/node-sass $(wwwrootDir) --output $(wwwrootDir)'
-      displayName: 'Compile Sass assets'
-    - task: gulp@1
-      displayName: 'Run gulp tasks'
-    - script: 'echo "$(Build.DefinitionName), $(Build.BuildId), $(Build.BuildNumber)" > buildinfo.txt'
-      displayName: 'Write build info'
-      workingDirectory: $(wwwrootDir)
-    - task: DotNetCoreCLI@2
-      displayName: 'Restore project dependencies'
-      inputs:
-        command: 'restore'
-        projects: '**/*.csproj'
-    - task: DotNetCoreCLI@2
-      displayName: 'Build the project - $(buildConfiguration)'
-      inputs:
-        command: 'build'
-        arguments: '--no-restore --configuration $(buildConfiguration)'
-        projects: '**/*.csproj'
-    - task: DotNetCoreCLI@2
-      displayName: 'Publish the project - $(buildConfiguration)'
-      inputs:
-        command: 'publish'
-        projects: '**/*.csproj'
-        publishWebProjects: false
-        arguments: '--no-build --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/$(buildConfiguration)'
-        zipAfterPublish: true
-    - task: PublishBuildArtifacts@1
-      displayName: 'Publish Artifact: drop'
-      condition: succeeded()
+      - task: NodeTool@0
+        displayName: 'Install Node.js'
+        inputs:
+          versionSpec: '14.x'
+      - script: |
+          npm install -g @angular/cli
+          npm install
+        displayName: 'Install NPM Dependencies'
+      - script: |
+          ng build --configuration=production --output-path $(Build.Artifactstagingdirectory)
+        displayName: 'Build Angular Project'
+      - script: |
+          npm run test-headless
+        displayName: 'Run Unit Tests'
+      - task: PublishPipelineArtifact@1
+        inputs:
+          targetPath: '$(Build.Artifactstagingdirectory)'
+          artifact: 'AngularBuildArtifacts' # Give an artifact name 
+          publishLocation: 'pipeline'
+      - task: ArchiveFiles@2
+        displayName: Create ZIP archive for build output
+        inputs:
+          rootFolderOrFile: '$(Build.Artifactstagingdirectory)'
+          includeRootFolder: false
+          archiveType: 'zip'
+          archiveFile: '$(Build.Artifactstagingdirectory)/AngularBuildArtifacts.$(Build.BuildNumber).zip' # Give ZIP file name appended with build number
+          replaceExistingArchive: true
+      - publish: $(Build.Artifactstagingdirectory)/AngularBuildArtifacts.$(Build.BuildNumber).zip
+        artifact: AngularBuildArtifacts-zip
     #Choose if the project needs to use self hosted agents instead of Microsoft hosted agent
     #For example, if project needs to restore nuget packages which are hosted in ACR internal package server, then needs to use self hosted agents
     useSelfHostedAgents: false
     #If useSelfHostedAgents = false: 
     #Provide your prefered Microsoft hosted agent pool image, with which you build tasks will be executed. Default is 'ubuntu-latest'
     #For more image options, check https://docs.microsoft.com/en-us/azure/devops/pipelines/agents/hosted?view=azure-devops&tabs=yaml#use-a-microsoft-hosted-agent
-    buildPoolImage: 'windows-latest'
+    buildPoolImage: 'ubuntu-latest'
     #If useSelfHostedAgents = true: 
     #Provide the self hosted agent pool name which is shared with your project, you can find the agent pool in project settings
     #If you are not sure about how to find it or the agent pool is not shared with your project, please contact ADOCS team for help
