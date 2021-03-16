@@ -37,8 +37,8 @@ stages:
 - template: ../build-version.yml
   parameters:
     stageName: 'Set Build Version'
-    Major: '1'
-    Minor: '0' 
+    Major: ${{parameters.buildVersionMajor}}
+    Minor: ${{parameters.buildVersionMinor}} 
 
 - stage: BuildStg
   jobs:
